@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template
+from flask import Flask, render_template, jsonify
 import psutil
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
@@ -12,19 +12,36 @@ metrics = {
     "disk_percent": 0,
     "net_sent": 0,
     "net_recv": 0,
-    "timestamp": None
+    "timestamp": None,
+    "alerts": []
 }
+
+# Thresholds
+CPU_THRESHOLD = 80  # %
+RAM_THRESHOLD = 75  # %
 
 def collect_metrics():
     global metrics
-    metrics['cpu_percent'] = psutil.cpu_percent(interval=1)
-    metrics['ram_percent'] = psutil.virtual_memory().percent
-    metrics['disk_percent'] = psutil.disk_usage('/').percent
-
+    cpu = psutil.cpu_percent(interval=1)
+    ram = psutil.virtual_memory().percent
+    disk = psutil.disk_usage('/').percent
     net_io = psutil.net_io_counters()
-    metrics['net_sent'] = net_io.bytes_sent
-    metrics['net_recv'] = net_io.bytes_recv
-    metrics['timestamp'] = datetime.now().strftime("%H:%M:%S")
+
+    metrics.update({
+        "cpu_percent": cpu,
+        "ram_percent": ram,
+        "disk_percent": disk,
+        "net_sent": net_io.bytes_sent,
+        "net_recv": net_io.bytes_recv,
+        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "alerts": []  # Reset alerts each cycle
+    })
+
+    # Check thresholds
+    if cpu > CPU_THRESHOLD:
+        metrics["alerts"].append(f"⚠️ High CPU usage: {cpu}%")
+    if ram > RAM_THRESHOLD:
+        metrics["alerts"].append(f"⚠️ High RAM usage: {ram}%")
 
 # Start scheduler to update metrics every 60 seconds
 scheduler = BackgroundScheduler()
@@ -42,6 +59,9 @@ def index():
 def get_metrics():
     return jsonify(metrics)
 
+@app.route('/alerts')
+def get_alerts():
+    return jsonify(alerts=metrics["alerts"])
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-
