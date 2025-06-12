@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>System Health Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; }
+    h1 { text-align: center; }
+    .chart-container { width: 600px; margin: auto; }
+  </style>
+</head>
+<body>
+  <h1>System Health Monitoring Dashboard</h1>
+  <div class="chart-container">
+    <canvas id="cpuChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <canvas id="ramChart"></canvas>
+  </div>
+  <div class="chart-container">
+    <canvas id="diskChart"></canvas>
+  </div>
+
+  <p style="text-align:center" id="lastUpdated"></p>
+
+  <script>
+    const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+    const ramCtx = document.getElementById('ramChart').getContext('2d');
+    const diskCtx = document.getElementById('diskChart').getContext('2d');
+
+    const cpuChart = new Chart(cpuCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Used %', 'Free %'],
+        datasets: [{
+          data: [0, 100],
+          backgroundColor: ['#ff6384', '#36a2eb'],
+        }]
+      },
+      options: { responsive: true, plugins: { title: { display: true, text: 'CPU Usage (%)' } } }
+    });
+
+    const ramChart = new Chart(ramCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Used %', 'Free %'],
+        datasets: [{
+          data: [0, 100],
+          backgroundColor: ['#ff9f40', '#4bc0c0'],
+        }]
+      },
+      options: { responsive: true, plugins: { title: { display: true, text: 'RAM Usage (%)' } } }
+    });
+
+    const diskChart = new Chart(diskCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['Used %', 'Free %'],
+        datasets: [{
+          data: [0, 100],
+          backgroundColor: ['#9966ff', '#ffcd56'],
+        }]
+      },
+      options: { responsive: true, plugins: { title: { display: true, text: 'Disk Usage (%)' } } }
+    });
+
+    // Fetch data and update charts every 5 seconds
+    async function updateMetrics() {
+      const response = await fetch('/metrics');
+      const data = await response.json();
+
+      cpuChart.data.datasets[0].data = [data.cpu_percent, 100 - data.cpu_percent];
+      ramChart.data.datasets[0].data = [data.ram_percent, 100 - data.ram_percent];
+      diskChart.data.datasets[0].data = [data.disk_percent, 100 - data.disk_percent];
+
+      cpuChart.update();
+      ramChart.update();
+      diskChart.update();
+
+      document.getElementById('lastUpdated').innerText = `Last Updated: ${data.timestamp}`;
+    }
+
+    updateMetrics();
+    setInterval(updateMetrics, 5000);
+  </script>
+</body>
+</html>
+
