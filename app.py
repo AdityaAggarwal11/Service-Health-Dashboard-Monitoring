@@ -17,8 +17,8 @@ metrics = {
 }
 
 # Thresholds
-CPU_THRESHOLD = 80  # %
-RAM_THRESHOLD = 75  # %
+CPU_THRESHOLD = 70  # %
+RAM_THRESHOLD = 70  # %
 
 def collect_metrics():
     global metrics
