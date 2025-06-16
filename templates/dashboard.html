@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Service Health Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
   <style>
     :root {
       --bg-color: #eef2f5;
@@ -92,11 +93,6 @@
       transform: translateY(-5px);
     }
 
-    canvas {
-      max-width: 240px;
-      max-height: 240px;
-    }
-
     .status {
       font-size: 24px;
       margin-top: 10px;
@@ -107,6 +103,49 @@
       font-size: 14px;
       color: var(--text-color);
       margin-bottom: 30px;
+    }
+
+    .line-graph-container {
+      width: 95%;
+      max-width: 1100px;
+      margin: 0 auto 50px;
+      padding: 20px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 4px 8px var(--shadow);
+    }
+
+    .line-graph-container h3 {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    #timeFilters {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    #timeFilters button {
+      background-color: #007bff;
+      border: none;
+      color: white;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s ease-in-out;
+    }
+
+    #timeFilters button.active,
+    #timeFilters button:hover {
+      background-color: #0056b3;
+    }
+
+    canvas#lineGraph {
+      width: 100%;
+      height: 400px;
     }
   </style>
 </head>
@@ -136,12 +175,32 @@
 
   <p id="lastUpdated">Last Updated: -</p>
 
+  <div class="line-graph-container">
+    <h3>Resource Usage Over Time</h3>
+    <div id="timeFilters">
+      <button data-range="1h" class="active">Last 1 Hour</button>
+      <button data-range="3h">Last 3 Hours</button>
+      <button data-range="1d">Last 1 Day</button>
+      <button data-range="all">All Data</button>
+    </div>
+    <canvas id="lineGraph"></canvas>
+  </div>
+
   <script>
     const cpuCtx = document.getElementById('cpuChart').getContext('2d');
     const ramCtx = document.getElementById('ramChart').getContext('2d');
     const diskCtx = document.getElementById('diskChart').getContext('2d');
+    const lineCtx = document.getElementById('lineGraph').getContext('2d');
 
-    let lastUpdateTimestamp = null; // To store last metrics fetch time (Date object)
+    let lastUpdateTimestamp = null;
+
+    // Store all data points here (timestamps and usages)
+    const history = {
+      timestamps: [],
+      cpu: [],
+      ram: [],
+      disk: []
+    };
 
     function getStatusIcon(percent, thresholds) {
       if (percent > thresholds.red) return '🔴';
@@ -155,6 +214,18 @@
       return [colors.green, '#ccc'];
     }
 
+    const thresholds = {
+      cpu: { yellow: 60, red: 85 },
+      ram: { yellow: 60, red: 85 },
+      disk: { yellow: 70, red: 90 }
+    };
+
+    const colors = {
+      green: '#4CAF50',
+      yellow: '#FFC107',
+      red: '#F44336'
+    };
+
     const cpuChart = new Chart(cpuCtx, {
       type: 'doughnut',
       data: {
@@ -167,11 +238,7 @@
       options: {
         responsive: true,
         plugins: {
-          title: {
-            display: true,
-            text: 'CPU Usage (%)',
-            font: { size: 18 }
-          },
+          title: { display: true, text: 'CPU Usage (%)', font: { size: 18 } },
           legend: { position: 'bottom' }
         },
         cutout: '70%'
@@ -190,11 +257,7 @@
       options: {
         responsive: true,
         plugins: {
-          title: {
-            display: true,
-            text: 'RAM Usage (%)',
-            font: { size: 18 }
-          },
+          title: { display: true, text: 'RAM Usage (%)', font: { size: 18 } },
           legend: { position: 'bottom' }
         },
         cutout: '70%'
@@ -213,60 +276,119 @@
       options: {
         responsive: true,
         plugins: {
-          title: {
-            display: true,
-            text: 'Disk Usage (%)',
-            font: { size: 18 }
-          },
+          title: { display: true, text: 'Disk Usage (%)', font: { size: 18 } },
           legend: { position: 'bottom' }
         },
         cutout: '70%'
       }
     });
 
-    // Format a date to IST string (YYYY-MM-DD HH:mm:ss IST)
+    const lineChart = new Chart(lineCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'CPU Usage (%)', data: [], borderColor: colors.green, fill: false, tension: 0.3 },
+          { label: 'RAM Usage (%)', data: [], borderColor: '#2196F3', fill: false, tension: 0.3 },
+          { label: 'Disk Usage (%)', data: [], borderColor: colors.yellow, fill: false, tension: 0.3 }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          x: {
+            type: 'time',
+            time: { unit: 'minute', tooltipFormat: 'MMM d, h:mm a' },
+            title: { display: true, text: 'Time' }
+          },
+          y: {
+            min: 0,
+            max: 100,
+            title: { display: true, text: 'Usage (%)' }
+          }
+        },
+        plugins: {
+          legend: { position: 'bottom' },
+          title: { display: false }
+        }
+      }
+    });
+
     function formatDateIST(date) {
       const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
       const istOffset = 5.5 * 60 * 60000;
       const istTime = new Date(utc + istOffset);
-
-      const year = istTime.getFullYear();
-      const month = String(istTime.getMonth() + 1).padStart(2, '0');
-      const day = String(istTime.getDate()).padStart(2, '0');
-      const hours = String(istTime.getHours()).padStart(2, '0');
-      const minutes = String(istTime.getMinutes()).padStart(2, '0');
-      const seconds = String(istTime.getSeconds()).padStart(2, '0');
-
-      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} IST`;
+      return istTime.toLocaleString('en-IN');
     }
 
-    // Convert timestamp to relative time string like "5 secs ago", "1 min ago"
     function relativeTimeFromNow(pastDate) {
       if (!pastDate) return '-';
-
       const now = new Date();
-      let diff = Math.floor((now - pastDate) / 1000); // difference in seconds
-
-      if (diff < 0) return 'just now';
-
+      let diff = Math.floor((now - pastDate) / 1000);
       if (diff < 5) return 'just now';
-      if (diff < 60) return `${diff} second${diff === 1 ? '' : 's'} ago`;
-      if (diff < 3600) {
-        const mins = Math.floor(diff / 60);
-        return `${mins} minute${mins === 1 ? '' : 's'} ago`;
-      }
-      if (diff < 86400) {
-        const hrs = Math.floor(diff / 3600);
-        return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
-      }
-      // For days or more, just show date:
+      if (diff < 60) return `${diff} seconds ago`;
+      if (diff < 3600) return `${Math.floor(diff / 60)} minutes ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
       return formatDateIST(pastDate);
     }
 
-    // Update the last updated paragraph with relative time
     function updateLastUpdatedRelative() {
       const relative = relativeTimeFromNow(lastUpdateTimestamp);
       document.getElementById('lastUpdated').innerText = `Last Updated: ${relative}`;
+    }
+
+    function filterHistoryByRange(range) {
+      const now = new Date();
+      let cutoffTime = 0;
+      switch(range) {
+        case '1h':
+          cutoffTime = now.getTime() - 60 * 60 * 1000;
+          break;
+        case '3h':
+          cutoffTime = now.getTime() - 3 * 60 * 60 * 1000;
+          break;
+        case '1d':
+          cutoffTime = now.getTime() - 24 * 60 * 60 * 1000;
+          break;
+        case 'all':
+        default:
+          cutoffTime = 0; // show all
+      }
+
+      if (cutoffTime === 0) {
+        return { 
+          timestamps: [...history.timestamps], 
+          cpu: [...history.cpu], 
+          ram: [...history.ram], 
+          disk: [...history.disk]
+        };
+      }
+
+      const filtered = {
+        timestamps: [],
+        cpu: [],
+        ram: [],
+        disk: []
+      };
+
+      for (let i = 0; i < history.timestamps.length; i++) {
+        if (history.timestamps[i].getTime() >= cutoffTime) {
+          filtered.timestamps.push(history.timestamps[i]);
+          filtered.cpu.push(history.cpu[i]);
+          filtered.ram.push(history.ram[i]);
+          filtered.disk.push(history.disk[i]);
+        }
+      }
+      return filtered;
+    }
+
+    function updateLineChart(range = '1h') {
+      const filtered = filterHistoryByRange(range);
+      lineChart.data.labels = filtered.timestamps;
+      lineChart.data.datasets[0].data = filtered.cpu;
+      lineChart.data.datasets[1].data = filtered.ram;
+      lineChart.data.datasets[2].data = filtered.disk;
+      lineChart.update();
     }
 
     async function updateMetrics() {
@@ -274,41 +396,43 @@
         const response = await fetch('/metrics');
         const data = await response.json();
 
-        const thresholds = {
-          cpu: { yellow: 60, red: 85 },
-          ram: { yellow: 60, red: 85 },
-          disk: { yellow: 70, red: 90 }
-        };
-
-        const colors = {
-          green: '#4CAF50',
-          yellow: '#FFC107',
-          red: '#F44336'
-        };
-
-        // CPU
         cpuChart.data.datasets[0].data = [data.cpu_percent, 100 - data.cpu_percent];
         cpuChart.data.datasets[0].backgroundColor = getColorSet(data.cpu_percent, thresholds.cpu, colors);
-        document.getElementById('cpuStatus').textContent = `Status: ${getStatusIcon(data.cpu_percent, thresholds.cpu)}`;
         cpuChart.update();
+        document.getElementById('cpuStatus').textContent = `Status: ${getStatusIcon(data.cpu_percent, thresholds.cpu)}`;
 
-        // RAM
         ramChart.data.datasets[0].data = [data.ram_percent, 100 - data.ram_percent];
         ramChart.data.datasets[0].backgroundColor = getColorSet(data.ram_percent, thresholds.ram, colors);
-        document.getElementById('ramStatus').textContent = `Status: ${getStatusIcon(data.ram_percent, thresholds.ram)}`;
         ramChart.update();
+        document.getElementById('ramStatus').textContent = `Status: ${getStatusIcon(data.ram_percent, thresholds.ram)}`;
 
-        // Disk
         diskChart.data.datasets[0].data = [data.disk_percent, 100 - data.disk_percent];
         diskChart.data.datasets[0].backgroundColor = getColorSet(data.disk_percent, thresholds.disk, colors);
-        document.getElementById('diskStatus').textContent = `Status: ${getStatusIcon(data.disk_percent, thresholds.disk)}`;
         diskChart.update();
+        document.getElementById('diskStatus').textContent = `Status: ${getStatusIcon(data.disk_percent, thresholds.disk)}`;
 
-        // Save the last update time to now
-        lastUpdateTimestamp = new Date();
+        const now = new Date();
+        // Store all history
+        history.timestamps.push(now);
+        history.cpu.push(data.cpu_percent);
+        history.ram.push(data.ram_percent);
+        history.disk.push(data.disk_percent);
 
-        // Update relative time display immediately
+        // Limit max history length to 1000 to avoid memory issues
+        if (history.timestamps.length > 1000) {
+          history.timestamps.shift();
+          history.cpu.shift();
+          history.ram.shift();
+          history.disk.shift();
+        }
+
+        lastUpdateTimestamp = now;
         updateLastUpdatedRelative();
+
+        // Update line chart with currently selected range
+        const activeBtn = document.querySelector('#timeFilters button.active');
+        const range = activeBtn ? activeBtn.dataset.range : '1h';
+        updateLineChart(range);
 
       } catch (err) {
         console.error('Error updating metrics:', err);
@@ -341,17 +465,21 @@
       document.body.classList.toggle('dark');
     }
 
-    // Initial load
+    // Filter button click handler
+    document.getElementById('timeFilters').addEventListener('click', e => {
+      if (e.target.tagName !== 'BUTTON') return;
+
+      document.querySelectorAll('#timeFilters button').forEach(btn => btn.classList.remove('active'));
+      e.target.classList.add('active');
+
+      updateLineChart(e.target.dataset.range);
+    });
+
     updateMetrics();
     updateAlerts();
-
-    // Update metrics and alerts every 5 seconds
     setInterval(updateMetrics, 5000);
     setInterval(updateAlerts, 5000);
-
-    // Update the relative time every second
     setInterval(updateLastUpdatedRelative, 1000);
   </script>
 </body>
 </html>
-
