@@ -19,13 +19,23 @@ metrics = {
 # Thresholds
 CPU_THRESHOLD = 80  # %
 RAM_THRESHOLD = 80  # %
+DISK_THRESHOLD = 90  # %
 
 def collect_metrics():
     global metrics
-    cpu = psutil.cpu_percent(interval=1)
+    cpu = psutil.cpu_percent(interval=0)
     ram = psutil.virtual_memory().percent
     disk = psutil.disk_usage('/').percent
     net_io = psutil.net_io_counters()
+
+    alerts = []
+
+    if cpu > CPU_THRESHOLD:
+        alerts.append(f"⚠️ High CPU usage: {cpu}%")
+    if ram > RAM_THRESHOLD:
+        alerts.append(f"⚠️ High RAM usage: {ram}%")
+    if disk > DISK_THRESHOLD:
+        alerts.append(f"⚠️ High Disk usage: {disk}%")
 
     metrics.update({
         "cpu_percent": cpu,
@@ -33,19 +43,13 @@ def collect_metrics():
         "disk_percent": disk,
         "net_sent": net_io.bytes_sent,
         "net_recv": net_io.bytes_recv,
-        "timestamp": datetime.now().strftime("%H:%M:%S"),
-        "alerts": []  # Reset alerts each cycle
+        "timestamp": datetime.now().isoformat(),
+        "alerts": alerts
     })
 
-    # Check thresholds
-    if cpu > CPU_THRESHOLD:
-        metrics["alerts"].append(f"⚠️ High CPU usage: {cpu}%")
-    if ram > RAM_THRESHOLD:
-        metrics["alerts"].append(f"⚠️ High RAM usage: {ram}%")
-
-# Start scheduler to update metrics every 60 seconds
+# Start scheduler to update metrics every 5 seconds
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=collect_metrics, trigger="interval", seconds=60)
+scheduler.add_job(func=collect_metrics, trigger="interval", seconds=5)
 scheduler.start()
 
 # Run once at start
@@ -65,3 +69,4 @@ def get_alerts():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
+
