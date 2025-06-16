@@ -83,8 +83,9 @@ This project builds a real-time **Service Health Dashboard** using:
 
 ## 📷 Demo Screenshot
 
-![image](https://github.com/user-attachments/assets/ad80fe7a-d43d-405d-a139-f31c29b5ec09)
-![image](https://github.com/user-attachments/assets/4599fe6e-598e-4d6d-acb1-2438b44f691d)
+![image](https://github.com/user-attachments/assets/9726205e-ea1d-4b3a-a79f-c19a035be79b)
+![image](https://github.com/user-attachments/assets/d5844cf1-4124-4577-b194-fd26ec5a7d49)
+
 
 
 
