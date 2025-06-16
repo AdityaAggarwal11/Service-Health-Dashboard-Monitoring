@@ -5,29 +5,133 @@
   <title>Service Health Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
-    canvas { max-width: 300px; margin: 20px; }
-    .charts { display: flex; flex-wrap: wrap; gap: 40px; justify-content: center; }
+    :root {
+      --bg-color: #eef2f5;
+      --text-color: #333;
+      --card-bg: white;
+      --alert-bg: #fff0f0;
+      --alert-color: #b30000;
+      --shadow: rgba(0, 0, 0, 0.1);
+    }
+
+    body.dark {
+      --bg-color: #1c1c1c;
+      --text-color: #f1f1f1;
+      --card-bg: #2a2a2a;
+      --alert-bg: #3a1c1c;
+      --alert-color: #ff6666;
+      --shadow: rgba(255, 255, 255, 0.05);
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      background: var(--bg-color);
+      color: var(--text-color);
+    }
+
+    header {
+      background-color: #007bff;
+      color: white;
+      padding: 20px 40px;
+      text-align: center;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    header h2 {
+      margin: 0;
+      font-size: 28px;
+    }
+
+    .toggle-darkmode {
+      background: transparent;
+      border: 1px solid white;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
     #alerts {
-      background-color: #ffcccc;
-      border: 1px solid #ff0000;
-      padding: 10px;
-      margin-bottom: 20px;
-      color: #a10000;
+      background-color: var(--alert-bg);
+      border-left: 5px solid var(--alert-color);
+      padding: 15px 20px;
+      margin: 20px auto;
+      width: 90%;
+      max-width: 800px;
+      color: var(--alert-color);
       font-weight: bold;
       display: none;
+      border-radius: 5px;
+      box-shadow: 0 0 5px var(--shadow);
+    }
+
+    .charts {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 30px;
+      padding: 30px 20px;
+    }
+
+    .chart-card {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px var(--shadow);
+      text-align: center;
+      width: 280px;
+      transition: transform 0.2s ease-in-out;
+    }
+
+    .chart-card:hover {
+      transform: translateY(-5px);
+    }
+
+    canvas {
+      max-width: 240px;
+      max-height: 240px;
+    }
+
+    .status {
+      font-size: 24px;
+      margin-top: 10px;
+    }
+
+    #lastUpdated {
+      text-align: center;
+      font-size: 14px;
+      color: var(--text-color);
+      margin-bottom: 30px;
     }
   </style>
 </head>
 <body>
 
-  <h2>Service Health Dashboard</h2>
+  <header>
+    <h2>Service Health Dashboard</h2>
+    <button class="toggle-darkmode" onclick="toggleDarkMode()">Toggle Dark Mode</button>
+  </header>
+
   <div id="alerts"></div>
 
   <div class="charts">
-    <canvas id="cpuChart"></canvas>
-    <canvas id="ramChart"></canvas>
-    <canvas id="diskChart"></canvas>
+    <div class="chart-card">
+      <canvas id="cpuChart"></canvas>
+      <div class="status" id="cpuStatus">Status: 🟢</div>
+    </div>
+    <div class="chart-card">
+      <canvas id="ramChart"></canvas>
+      <div class="status" id="ramStatus">Status: 🟢</div>
+    </div>
+    <div class="chart-card">
+      <canvas id="diskChart"></canvas>
+      <div class="status" id="diskStatus">Status: 🟢</div>
+    </div>
   </div>
 
   <p id="lastUpdated">Last Updated: -</p>
@@ -37,16 +141,39 @@
     const ramCtx = document.getElementById('ramChart').getContext('2d');
     const diskCtx = document.getElementById('diskChart').getContext('2d');
 
+    function getStatusIcon(percent, thresholds) {
+      if (percent > thresholds.red) return '🔴';
+      if (percent > thresholds.yellow) return '🟡';
+      return '🟢';
+    }
+
+    function getColorSet(percent, thresholds, colors) {
+      if (percent > thresholds.red) return [colors.red, '#ccc'];
+      if (percent > thresholds.yellow) return [colors.yellow, '#ccc'];
+      return [colors.green, '#ccc'];
+    }
+
     const cpuChart = new Chart(cpuCtx, {
       type: 'doughnut',
       data: {
         labels: ['Used %', 'Free %'],
         datasets: [{
           data: [0, 100],
-          backgroundColor: ['#ff6384', '#36a2eb'],
+          backgroundColor: ['#4CAF50', '#ccc'],
         }]
       },
-      options: { responsive: true, plugins: { title: { display: true, text: 'CPU Usage (%)' } } }
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'CPU Usage (%)',
+            font: { size: 18 }
+          },
+          legend: { position: 'bottom' }
+        },
+        cutout: '70%'
+      }
     });
 
     const ramChart = new Chart(ramCtx, {
@@ -55,10 +182,21 @@
         labels: ['Used %', 'Free %'],
         datasets: [{
           data: [0, 100],
-          backgroundColor: ['#ff9f40', '#4bc0c0'],
+          backgroundColor: ['#4CAF50', '#ccc'],
         }]
       },
-      options: { responsive: true, plugins: { title: { display: true, text: 'RAM Usage (%)' } } }
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'RAM Usage (%)',
+            font: { size: 18 }
+          },
+          legend: { position: 'bottom' }
+        },
+        cutout: '70%'
+      }
     });
 
     const diskChart = new Chart(diskCtx, {
@@ -67,24 +205,56 @@
         labels: ['Used %', 'Free %'],
         datasets: [{
           data: [0, 100],
-          backgroundColor: ['#9966ff', '#ffcd56'],
+          backgroundColor: ['#4CAF50', '#ccc'],
         }]
       },
-      options: { responsive: true, plugins: { title: { display: true, text: 'Disk Usage (%)' } } }
+      options: {
+        responsive: true,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Disk Usage (%)',
+            font: { size: 18 }
+          },
+          legend: { position: 'bottom' }
+        },
+        cutout: '70%'
+      }
     });
 
-    // Update metrics
     async function updateMetrics() {
       try {
         const response = await fetch('/metrics');
         const data = await response.json();
 
-        cpuChart.data.datasets[0].data = [data.cpu_percent, 100 - data.cpu_percent];
-        ramChart.data.datasets[0].data = [data.ram_percent, 100 - data.ram_percent];
-        diskChart.data.datasets[0].data = [data.disk_percent, 100 - data.disk_percent];
+        const thresholds = {
+          cpu: { yellow: 60, red: 85 },
+          ram: { yellow: 60, red: 85 },
+          disk: { yellow: 70, red: 90 }
+        };
 
+        const colors = {
+          green: '#4CAF50',
+          yellow: '#FFC107',
+          red: '#F44336'
+        };
+
+        // CPU
+        cpuChart.data.datasets[0].data = [data.cpu_percent, 100 - data.cpu_percent];
+        cpuChart.data.datasets[0].backgroundColor = getColorSet(data.cpu_percent, thresholds.cpu, colors);
+        document.getElementById('cpuStatus').textContent = `Status: ${getStatusIcon(data.cpu_percent, thresholds.cpu)}`;
         cpuChart.update();
+
+        // RAM
+        ramChart.data.datasets[0].data = [data.ram_percent, 100 - data.ram_percent];
+        ramChart.data.datasets[0].backgroundColor = getColorSet(data.ram_percent, thresholds.ram, colors);
+        document.getElementById('ramStatus').textContent = `Status: ${getStatusIcon(data.ram_percent, thresholds.ram)}`;
         ramChart.update();
+
+        // Disk
+        diskChart.data.datasets[0].data = [data.disk_percent, 100 - data.disk_percent];
+        diskChart.data.datasets[0].backgroundColor = getColorSet(data.disk_percent, thresholds.disk, colors);
+        document.getElementById('diskStatus').textContent = `Status: ${getStatusIcon(data.disk_percent, thresholds.disk)}`;
         diskChart.update();
 
         document.getElementById('lastUpdated').innerText = `Last Updated: ${data.timestamp}`;
@@ -93,7 +263,6 @@
       }
     }
 
-    // Fetch alerts
     async function updateAlerts() {
       try {
         const response = await fetch('/alerts');
@@ -104,7 +273,7 @@
         if (data.alerts.length > 0) {
           data.alerts.forEach(alert => {
             const div = document.createElement('div');
-            div.textContent = alert;
+            div.textContent = `⚠️ ${alert}`;
             alertBox.appendChild(div);
           });
           alertBox.style.display = 'block';
@@ -114,6 +283,10 @@
       } catch (err) {
         console.error('Error fetching alerts:', err);
       }
+    }
+
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark');
     }
 
     updateMetrics();
